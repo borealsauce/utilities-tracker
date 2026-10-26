@@ -1,0 +1,122 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Utilities Tracker</title>
+<style>
+body{font-family:-apple-system,system-ui,sans-serif;margin:0;background:#0f1419;color:#e6e6e6}
+#gate{display:flex;justify-content:center;align-items:center;min-height:100vh}#gate form{text-align:center}
+input,button{font-size:18px;padding:10px;border-radius:8px;border:1px solid #444;background:#1b222b;color:#fff;margin:4px}
+#app{display:none;max-width:1100px;margin:auto;padding:12px}h1{font-size:22px;margin:8px 0}h2{font-size:17px;margin:22px 0 8px}
+.muted{color:#999;font-size:13px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.card{background:#1b222b;border-radius:10px;padding:10px}.card .l{font-size:12px;color:#aaa}.card .v{font-size:20px;font-weight:600}.card .s{font-size:11px;color:#888}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}th,td{padding:6px 8px;border-bottom:1px solid #2a323c;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}th{background:#1b222b;position:sticky;top:0}tfoot td{font-weight:700}
+.k{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 10px}svg{width:100%;height:auto;background:#151b22;border-radius:10px}
+.neg{color:#f66}
+</style></head><body>
+<div id="gate"><form onsubmit="go(event)"><h1>Utilities Tracker</h1><p class="muted">Enter password</p><input id="pw" type="password" inputmode="numeric" autofocus><button>Open</button><div id="err" class="neg"></div></form></div>
+<div id="app">
+<h1>Utilities Tracker</h1><div class="muted" id="sub"></div>
+<div class="cards" id="cards" style="margin-top:10px"></div>
+<h2>Monthly cost chart</h2><div class="muted"><span class="k" style="background:#4aa3ff"></span>Water<span class="k" style="background:#ffb347"></span>Gas<span class="k" style="background:#7ddc6f"></span>Electric billed (NEM)</div><div id="chart"></div>
+<h2>Year over year</h2><div class="tw" id="yoy"></div>
+<div class="muted">Electric is solar NEM: monthly billed charges accrue and are paid once a year at the December true-up. "Cash paid" = water + gas + true-up paid. Partial years: water starts Feb 2023; SDG&amp;E history starts Sep 2024; 2026 is YTD through Oct.</div>
+<h2>Same months compared (Jan–Oct)</h2><div class="tw" id="same"></div>
+<h2>Average monthly cost</h2><div class="tw" id="avg"></div>
+<h2>Monthly detail</h2><div class="tw" id="mon"></div>
+<div class="muted" style="margin:14px 0">Sources: Olivenhain MWD statement emails (acct 1051582-226655), SDG&amp;E billing history &amp; bills (electric 1435997033, gas 1435996170). Month = statement month.</div>
+</div>
+<script>
+let D;const b64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function decrypt(pw){const e=await (await fetch('data.enc.json',{cache:'no-store'})).json();
+const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);
+const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b64(e.salt),iterations:e.iter,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['decrypt']);
+return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(e.iv)},key,b64(e.ct))));}
+const $=v=>v==null?'–':(v<0?'-':'')+'$'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const N=v=>v==null||v===0?'–':v.toLocaleString('en-US');
+function tbl(id,h,rows,foot){document.getElementById(id).innerHTML='<table><thead><tr>'+h.map(x=>`<th>${x}</th>`).join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(c=>Array.isArray(c)?`<td data-v="${c[1]}">${c[0]}</td>`:`<td>${c}</td>`).join('')+'</tr>').join('')+'</tbody>'+(foot?'<tfoot><tr>'+foot.map(c=>`<td>${c}</td>`).join('')+'</tr></tfoot>':'')+'</table>';}
+const ML=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];const mn=k=>ML[+k.slice(5)]+' '+k.slice(0,4);
+function render(){const R=D.rows,Y=D.years,P=D.pending;
+document.getElementById('sub').textContent=D.addr+' · updated '+D.updated;
+const last=Y[Y.length-1],l12=R.slice(-12),s12=l12.reduce((a,r)=>a+(r.water||0)+(r.gas||0)+(r.elec||0),0);
+document.getElementById('cards').innerHTML=[['Last 12 months billed',$(s12),'water+gas+electric'],['Avg / month (last 12)',$(s12/12),''],['2026 YTD billed',$(last.water+last.gas+last.elec),'Jan–Oct'],['Electric true-up pending',$(P.amount),'as of '+P.asof+' · true-up '+P.due],['2025 true-up paid',$(1152.91),'Dec 2025'],['2024 true-up paid',$(1779.92),'Dec 2024']].map(c=>`<div class="card"><div class="l">${c[0]}</div><div class="v">${c[1]}</div><div class="s">${c[2]}</div></div>`).join('');
+// chart
+const W=900,H=280,pl=44,pb=34,bw=(W-pl-6)/R.length,mx=Math.max(...R.map(r=>(r.water||0)+Math.max(0,r.gas||0)+Math.max(0,r.elec||0)));const sy=v=>(H-pb)*(v/mx);let g='';
+for(let t=0;t<=mx;t+=100){const y=H-pb-sy(t);g+=`<line x1="${pl}" x2="${W}" y1="${y}" y2="${y}" stroke="#2a323c"/><text x="${pl-4}" y="${y+4}" fill="#888" font-size="11" text-anchor="end">$${t}</text>`}
+R.forEach((r,i)=>{let y=H-pb;const x=pl+i*bw+1;[['water','#4aa3ff'],['gas','#ffb347'],['elec','#7ddc6f']].forEach(([k,c])=>{const v=Math.max(0,r[k]||0);if(!v)return;const h=sy(v);y-=h;g+=`<rect x="${x}" y="${y}" width="${bw-2}" height="${h}" fill="${c}"><title>${mn(r.month)} ${k}: ${$(r[k])}</title></rect>`});
+if(r.month.endsWith('-01')||i==0)g+=`<text x="${x}" y="${H-12}" fill="#aaa" font-size="11">${mn(r.month)}</text>`});
+document.getElementById('chart').innerHTML=`<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
+tbl('yoy',['Year','Water','Gas','Electric billed','Electric true-up paid','Total billed','Cash paid','Net kWh','Months (W/G/E)'],Y.map(y=>[y.year+(y.year=='2026'?' YTD':''),$(y.water),y.ng?$(y.gas):'–',y.ne?$(y.elec):'–',y.trueup?$(y.trueup):(y.year=='2026'?$(P.amount)+' pending':'–'),$(y.water+y.gas+y.elec),$(y.water+y.gas+y.trueup),N(y.kwh),`${y.nw}/${y.ng}/${y.ne}`]));
+const same=Y.map(y=>{const rr=R.filter(r=>r.month.startsWith(y.year)&&+r.month.slice(5)<=10);const s=k=>rr.some(r=>r[k]!=null)?rr.reduce((a,r)=>a+(r[k]||0),0):null;return [y.year,s('water'),s('gas'),s('elec'),rr.reduce((a,r)=>a+(r.kwh||0),0)]});
+tbl('same',['Year (Jan–Oct)','Water','Gas','Electric billed','Net kWh'],same.map(s=>[s[0],$(s[1]),$(s[2]),$(s[3]),N(s[4])]));
+tbl('avg',['Year','Water / mo','Gas / mo','Electric billed / mo','Combined / mo'],Y.map(y=>{const a=(v,n)=>n?v/n:null;const w=a(y.water,y.nw),g=a(y.gas,y.ng),e=a(y.elec,y.ne);return [y.year,$(w),$(g),$(e),$((w||0)+(g||0)+(e||0))]}));
+const tot=k=>R.reduce((a,r)=>a+(r[k]||0),0);
+tbl('mon',['Month','Water','Gas','Electric billed','Net kWh','True-up paid','Total billed'],R.slice().reverse().map(r=>[[mn(r.month),r.month],$(r.water),$(r.gas),$(r.elec),N(r.kwh),r.trueup?$(r.trueup):'–',$((r.water||0)+(r.gas||0)+(r.elec||0))]),['Total',$(tot('water')),$(tot('gas')),$(tot('elec')),N(tot('kwh')),$(tot('trueup')),$(tot('water')+tot('gas')+tot('elec'))]);
+document.dispatchEvent(new Event('tablesrendered'));}
+async function go(e){e&&e.preventDefault();try{const pw=e?document.getElementById('pw').value:sessionStorage.utpw;D=await decrypt(pw);sessionStorage.utpw=pw;}catch(x){if(e)document.getElementById('err').textContent='Wrong password';return;}
+document.getElementById('gate').style.display='none';document.getElementById('app').style.display='block';render();}
+if(sessionStorage.utpw)go();
+</script><!--SORTABLE-START--><script>
+/* Shared sortable tables (Grok Bot trackers). Click any header: asc/desc toggle with ▲/▼.
+   Works on dynamically rendered tables via event delegation. Totals (tfoot, .total/.ft/.tot rows,
+   or first cell TOTAL/ALL-TIME/GRAND) stay pinned at bottom. Group-label rows (fewer cells / colspan)
+   keep their members: sorting happens within each group. Uses td[data-v] when present.
+   Skip: th with own onclick, th.nosort, or table[data-nosort]. */
+(function(){
+  if(window.__sortableShared)return;window.__sortableShared=1;
+  var st=document.createElement('style');
+  st.textContent='table:not([data-nosort]) th:not(.nosort){cursor:pointer;user-select:none}th .srt-ar{font-size:.8em;opacity:.85;margin-left:3px}';
+  (document.head||document.documentElement).appendChild(st);
+  var MON={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+  function key(cell){
+    if(!cell)return null;
+    var raw=cell.dataset&&cell.dataset.v!=null?cell.dataset.v:cell.textContent;
+    var s=String(raw).replace(/[▲▼]/g,'').trim();
+    if(!s||s==='—'||s==='-'||s==='–'||/^n\/?a$/i.test(s))return null;
+    var m;
+    if((m=s.match(/^(\d{4})-(\d{2})(?:-(\d{2}))?/)))return {n:Date.UTC(+m[1],+m[2]-1,+(m[3]||1))};
+    if((m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/))){var y=+m[3];if(y<100)y+=2000;return {n:Date.UTC(y,+m[1]-1,+m[2])};}
+    if((m=s.match(/^([A-Za-z]{3})[a-z]*\.? (\d{1,2}),? (\d{4})$/))&&MON[m[1].toLowerCase()])return {n:Date.UTC(+m[3],MON[m[1].toLowerCase()]-1,+m[2])};
+    if((m=s.match(/^([A-Za-z]{3})[a-z]* (\d{4})$/))&&MON[m[1].toLowerCase()])return {n:Date.UTC(+m[2],MON[m[1].toLowerCase()]-1,1)};
+    if((m=s.match(/^Q([1-4]) (\d{4})$/i)))return {n:Date.UTC(+m[2],(+m[1]-1)*3,1)};
+    var t=s.replace(/[$,%x×\s]|USD/gi,'').replace(/^\+/,'').replace(/[−–]/g,'-');
+    var neg=/^\(.*\)$/.test(t);if(neg)t=t.slice(1,-1);
+    var mult=1;if((m=t.match(/^(-?[\d.]+)([KMB])$/i))){t=m[1];mult={k:1e3,m:1e6,b:1e9}[m[2].toLowerCase()];}
+    if(/^-?\d*\.?\d+$/.test(t))return {n:parseFloat(t)*mult*(neg?-1:1)};
+    return {s:s.toLowerCase()};
+  }
+  function pinned(r){
+    if(r.parentElement&&r.parentElement.tagName==='TFOOT')return true;
+    if(/(^|\s)(total|totals|ft|tot|sum|grand|pinned)(\s|$)/i.test(r.className))return true;
+    var c=r.cells[0];return !!c&&/^\s*(TOTAL|TOTALS|ALL-TIME|GRAND TOTAL)\b/i.test(c.textContent);
+  }
+  document.addEventListener('click',function(e){
+    var th=e.target.closest&&e.target.closest('th');if(!th||th.onclick||th.classList.contains('nosort'))return;
+    var tb=th.closest('table');if(!tb||tb.hasAttribute('data-nosort'))return;
+    var hr=th.parentElement;if(hr.parentElement.tagName==='TFOOT')return;
+    var ci=0;for(var k=0;k<hr.cells.length&&hr.cells[k]!==th;k++)ci+=hr.cells[k].colSpan||1;
+    var ncol=0;for(k=0;k<hr.cells.length;k++)ncol+=hr.cells[k].colSpan||1;
+    var dir=th.dataset.sdir==='asc'?'desc':'asc',m=dir==='asc'?1:-1;
+    tb.querySelectorAll('th').forEach(function(x){delete x.dataset.sdir;var a=x.querySelector('.srt-ar');if(a)a.remove();});
+    th.dataset.sdir=dir;var ar=document.createElement('span');ar.className='srt-ar';ar.textContent=dir==='asc'?'▲':'▼';th.appendChild(ar);
+    var bodies=tb.tBodies.length?[].slice.call(tb.tBodies):[tb];
+    bodies.forEach(function(body){
+      var all=[].slice.call(body.rows).filter(function(r){return r!==hr&&!(r.cells.length&&r.cells[0].tagName==='TH'&&!r.querySelector('td'));});
+      var pins=[],groups=[{head:null,rows:[]}];
+      all.forEach(function(r){
+        if(pinned(r)){pins.push(r);return;}
+        var w=0;for(var j=0;j<r.cells.length;j++)w+=r.cells[j].colSpan||1;
+        if(r.cells.length===1&&ncol>1)groups.push({head:r,rows:[]});else groups[groups.length-1].rows.push(r);
+      });
+      function cellAt(r){var x=0;for(var j=0;j<r.cells.length;j++){if(x===ci)return r.cells[j];x+=r.cells[j].colSpan||1;}return null;}
+      groups.forEach(function(g){
+        g.rows.sort(function(a,b){var A=key(cellAt(a)),B=key(cellAt(b));
+          if(!A&&!B)return 0;if(!A)return 1;if(!B)return -1;
+          if(A.n!=null&&B.n!=null)return (A.n-B.n)*m;
+          return String(A.s!=null?A.s:A.n).localeCompare(String(B.s!=null?B.s:B.n),undefined,{numeric:true})*m;});
+        if(g.head)body.appendChild(g.head);g.rows.forEach(function(r){body.appendChild(r);});
+      });
+      pins.forEach(function(r){body.appendChild(r);});
+    });
+  },false);
+})();
+
+</script><!--SORTABLE-END-->
+</body></html>
