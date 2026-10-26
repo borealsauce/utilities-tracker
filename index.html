@@ -9,7 +9,7 @@ input,button{font-size:18px;padding:10px;border-radius:8px;border:1px solid #444
 .tw{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}th,td{padding:6px 8px;border-bottom:1px solid #2a323c;text-align:right;white-space:nowrap}
 th:first-child,td:first-child{text-align:left}th{background:#1b222b;position:sticky;top:0}tfoot td{font-weight:700}
 .k{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 10px}svg{width:100%;height:auto;background:#151b22;border-radius:10px}
-.neg{color:#f66}
+.neg{color:#f66}th{position:relative}.rz{position:absolute;right:0;top:0;bottom:0;width:10px;cursor:col-resize;touch-action:none;z-index:2}.rz:after{content:"";position:absolute;right:3px;top:25%;bottom:25%;width:2px;background:#3a4152}.rz:hover:after,.rz.on:after{background:#22c55e}table.fx{table-layout:fixed;width:auto}table.fx td,table.fx th{overflow:hidden;text-overflow:ellipsis}
 </style></head><body>
 <div id="gate"><form onsubmit="go(event)"><h1>Utilities Tracker</h1><p class="muted">Enter password</p><input id="pw" type="password" inputmode="numeric" autofocus><button>Open</button><div id="err" class="neg"></div></form></div>
 <div id="app">
@@ -49,7 +49,15 @@ tbl('same',['Year (Jan–Oct)','Water','Gas','Electric billed','Net kWh'],same.m
 tbl('avg',['Year','Water / mo','Gas / mo','Electric billed / mo','Combined / mo'],Y.map(y=>{const a=(v,n)=>n?v/n:null;const w=a(y.water,y.nw),g=a(y.gas,y.ng),e=a(y.elec,y.ne);return [y.year,$(w),$(g),$(e),$((w||0)+(g||0)+(e||0))]}));
 const tot=k=>R.reduce((a,r)=>a+(r[k]||0),0);
 tbl('mon',['Month','Water','Gas','Electric billed','Net kWh','True-up paid','Total billed'],R.slice().reverse().map(r=>[[mn(r.month),r.month],$(r.water),$(r.gas),$(r.elec),N(r.kwh),r.trueup?$(r.trueup):'–',$((r.water||0)+(r.gas||0)+(r.elec||0))]),['Total',$(tot('water')),$(tot('gas')),$(tot('elec')),N(tot('kwh')),$(tot('trueup')),$(tot('water')+tot('gas')+tot('elec'))]);
-document.dispatchEvent(new Event('tablesrendered'));}
+document.querySelectorAll('#app table').forEach(rz);}
+function rz(t){const ths=[...t.querySelectorAll('thead th')],W=ths.map(th=>th.getBoundingClientRect().width),tw=()=>t.style.width=W.reduce((a,b)=>a+b,0)+'px';
+ths.forEach((th,i)=>th.style.width=W[i]+'px');tw();t.classList.add('fx');
+ths.forEach((th,i)=>{const h=document.createElement('span');h.className='rz';h.title='Drag to resize';th.appendChild(h);
+h.addEventListener('click',e=>{e.stopPropagation();e.preventDefault()},true);
+h.addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDefault();h.setPointerCapture(e.pointerId);h.classList.add('on');const x0=e.clientX,w0=W[i];
+const mv=ev=>{W[i]=Math.max(40,w0+ev.clientX-x0);th.style.width=W[i]+'px';tw()};
+h.addEventListener('pointermove',mv);h.addEventListener('pointerup',()=>{h.classList.remove('on');h.removeEventListener('pointermove',mv)},{once:true})})})}
+
 async function go(e){e&&e.preventDefault();try{const pw=e?document.getElementById('pw').value:sessionStorage.utpw;D=await decrypt(pw);sessionStorage.utpw=pw;}catch(x){if(e)document.getElementById('err').textContent='Wrong password';return;}
 document.getElementById('gate').style.display='none';document.getElementById('app').style.display='block';render();}
 if(sessionStorage.utpw)go();
