@@ -11,7 +11,7 @@ th:first-child,td:first-child{text-align:left}th{background:#1b222b;position:sti
 .k{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 10px}svg{width:100%;height:auto;background:#151b22;border-radius:10px}
 .neg{color:#f66}th{position:relative}.rz{position:absolute;right:0;top:0;bottom:0;width:10px;cursor:col-resize;touch-action:none;z-index:2}.rz:after{content:"";position:absolute;right:3px;top:25%;bottom:25%;width:2px;background:#3a4152}.rz:hover:after,.rz.on:after{background:#22c55e}table.fx{table-layout:fixed;width:auto}table.fx td,table.fx th{overflow:hidden;text-overflow:ellipsis}
 </style></head><body>
-<div id="gate"><form onsubmit="go(event)"><h1>Utilities Tracker</h1><p class="muted">Enter password</p><input id="pw" type="password" inputmode="numeric" autofocus><button>Open</button><div id="err" class="neg"></div></form></div>
+<div id="gate"><form onsubmit="go(event)"><h1>Utilities Tracker</h1><p class="muted">Enter password</p><input id="pw" type="password" inputmode="numeric" autocomplete="current-password" autofocus><button>Open</button><div id="err" class="neg"></div></form></div>
 <div id="app">
 <h1>Utilities Tracker</h1><div class="muted" id="sub"></div>
 <div class="cards" id="cards" style="margin-top:10px"></div>
@@ -59,8 +59,8 @@ const mv=ev=>{W[i]=Math.max(40,w0+ev.clientX-x0);th.style.width=W[i]+'px';tw()};
 h.addEventListener('pointermove',mv);h.addEventListener('pointerup',()=>{h.classList.remove('on');h.removeEventListener('pointermove',mv)},{once:true})})})}
 
 async function go(e){e&&e.preventDefault();try{const pw=e?document.getElementById('pw').value:sessionStorage.utpw;D=await decrypt(pw);sessionStorage.utpw=pw;}catch(x){if(e)document.getElementById('err').textContent='Wrong password';return;}
-document.getElementById('gate').style.display='none';document.getElementById('app').style.display='block';render();}
-if(sessionStorage.utpw)go();
+document.getElementById('gate').style.display='none';document.getElementById('app').style.display='block';try{render()}catch(x){document.getElementById('sub').textContent='Display error: '+x.message;console.error(x)}}
+try{if(sessionStorage.utpw)go()}catch(x){}
 </script><!--SORTABLE-START--><script>
 /* Shared sortable tables (Grok Bot trackers). Click any header: asc/desc toggle with ▲/▼.
    Works on dynamically rendered tables via event delegation. Totals (tfoot, .total/.ft/.tot rows,
