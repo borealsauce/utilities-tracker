@@ -14,7 +14,7 @@ th:first-child,td:first-child{text-align:left}th{background:#1b222b;position:sti
 
 <div id="app">
 <h1>Utilities Tracker</h1><div class="muted" id="sub"></div>
-<div class="tabs"><button class="on" onclick="tab('ov',this)">Overview</button><button onclick="tab('el',this)">Electric</button><button onclick="tab('wa',this)">Water</button></div>
+<div class="tabs"><button class="on" onclick="tab('ov',this)">Overview</button><button onclick="tab('el',this)">Electric</button><button onclick="tab('wa',this)">Water</button><button onclick="tab('ga',this)">Gas</button></div>
 <div class="tab on" id="t-ov"><div class="cards" id="cards" style="margin-top:10px"></div>
 <h2>Monthly cost chart</h2><div class="muted"><span class="k" style="background:#4aa3ff"></span>Water<span class="k" style="background:#ffb347"></span>Gas<span class="k" style="background:#7ddc6f"></span>Electric billed (NEM)</div><div id="chart"></div>
 <h2>Year over year</h2><div class="tw" id="yoy"></div>
@@ -35,6 +35,11 @@ th:first-child,td:first-child{text-align:left}th{background:#1b222b;position:sti
 <h2>Same month, year over year</h2><div class="tw" id="wyoy"></div>
 <h2>Water monthly detail</h2><div class="tw" id="wmon"></div>
 <div class="muted">Olivenhain MWD acct 1051582-226655. Usage (HCF/gallons) is not in the bill emails; it needs an Olivenhain portal sign-in.</div></div>
+<div class="tab" id="t-ga"><div class="cards" id="gcards"></div>
+<h2>Monthly gas cost</h2><div id="gchart"></div>
+<h2>Same month, year over year</h2><div class="tw" id="gyoy"></div>
+<h2>Gas monthly detail</h2><div class="tw" id="gmon"></div>
+<div class="muted">SDG&amp;E gas acct 1435996170. History starts Sep 2024. Therms are not in the billing data on file.</div></div>
 <div class="muted" style="margin:14px 0">Sources: Olivenhain MWD statement emails (acct 1051582-226655), SDG&amp;E billing history &amp; bills (electric 1435997033, gas 1435996170). Month = statement month.</div>
 </div>
 <script>
@@ -89,7 +94,13 @@ cardsTo('wcards',[['Last bill',$(W[W.length-1].water),mn(W[W.length-1].month)],[
 bars('wchart',W,'water','#4aa3ff');
 const wy=[...new Set(W.map(r=>r.month.slice(0,4)))];
 tbl('wyoy',['Month',...wy],ML.slice(1).map((m,i)=>{const mm=String(i+1).padStart(2,'0');return [[m,i],...wy.map(y=>{const r=R.find(r=>r.month==y+'-'+mm);return [$(r&&r.water),r&&r.water||0]})]}));
-tbl('wmon',['Month','Water $','Change vs prior yr'],W.slice().reverse().map(r=>{const p=R.find(x=>x.month==(+r.month.slice(0,4)-1)+r.month.slice(4));const d=p&&p.water!=null?r.water-p.water:null;return [[mn(r.month),r.month],[$(r.water),r.water],[d==null?'–':$(d),d==null?0:d]]}));}
+tbl('wmon',['Month','Water $','Change vs prior yr'],W.slice().reverse().map(r=>{const p=R.find(x=>x.month==(+r.month.slice(0,4)-1)+r.month.slice(4));const d=p&&p.water!=null?r.water-p.water:null;return [[mn(r.month),r.month],[$(r.water),r.water],[d==null?'–':$(d),d==null?0:d]]}));
+const G=R.filter(r=>r.gas!=null),gl=G[G.length-1],cy=gl.month.slice(0,4),lm=+gl.month.slice(5),gytd=G.filter(r=>r.month.startsWith(cy)),gly=G.filter(r=>r.month.startsWith(String(cy-1))&&+r.month.slice(5)<=lm),g12=G.slice(-12);
+cardsTo('gcards',[['Last bill',$(gl.gas),mn(gl.month)],[cy+' YTD',$(sum(gytd,'gas')),'Jan–'+ML[lm]],['Same period '+(cy-1),$(sum(gly,'gas')),'Jan–'+ML[lm]],['Avg / month (last 12)',$(sum(g12,'gas')/g12.length),'']]);
+bars('gchart',G,'gas','#ffb347');
+const gy=[...new Set(G.map(r=>r.month.slice(0,4)))];
+tbl('gyoy',['Month',...gy],ML.slice(1).map((m,i)=>{const mm=String(i+1).padStart(2,'0');return [[m,i],...gy.map(y=>{const r=R.find(r=>r.month==y+'-'+mm);return [$(r&&r.gas),r&&r.gas||0]})]}));
+tbl('gmon',['Month','Gas $','Change vs prior yr'],G.slice().reverse().map(r=>{const p=R.find(x=>x.month==(+r.month.slice(0,4)-1)+r.month.slice(4));const d=p&&p.gas!=null?r.gas-p.gas:null;return [[mn(r.month),r.month],[$(r.gas),r.gas],[d==null?'–':$(d),d==null?0:d]]}));}
 
 function rz(t){const ths=[...t.querySelectorAll('thead th')],W=ths.map(th=>th.getBoundingClientRect().width||Math.max(90,th.textContent.length*8+24)),tw=()=>t.style.width=W.reduce((a,b)=>a+b,0)+'px';
 ths.forEach((th,i)=>th.style.width=W[i]+'px');tw();t.classList.add('fx');
